@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Nitesi-DBI
-version:            0.0003
+version:            0.0010
 abstract:           DBI bundle for Nitesi shop machine
 author:
     - Stefan Hornburg (Racke) <racke@linuxia.de>
@@ -11,6 +11,7 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
+    Nitesi:               0.001
     SQL::Abstract:        0
     SQL::Abstract::More:  0
     Test::More:           0

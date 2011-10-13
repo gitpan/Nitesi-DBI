@@ -6,7 +6,7 @@ use warnings;
 use base 'Nitesi::Object';
 use Nitesi::Query::DBI;
 
-__PACKAGE__->attributes(qw/dbh/);
+__PACKAGE__->attributes(qw/dbh crypt fields/);
 
 =head1 NAME
 
@@ -18,7 +18,24 @@ Nitesi::Account:Provider::DBI - DBI Account Provider for Nitesi Shop Machine
 
 =head2 init
 
-Initializer for this class. No arguments.
+Initializer for this class. Arguments are:
+
+=over 4
+
+=item dbh
+
+DBI handle (required).
+
+=item crypt
+
+L<Account::Manager::Password> instance (required).
+
+=item fields
+
+List of fields (as array reference) to be retrieved from the
+database and put into account data return by login method.
+
+=back
 
 =cut
 
@@ -59,20 +76,38 @@ List of permissions for this user.
 
 sub login {
     my ($self, %args) = @_;
-    my ($results, $ret, @roles, @permissions);
+    my ($results, $ret, @roles, @permissions, @fields, $acct);
 
-    $results = $self->{sql}->select(table => 'users', fields => [qw/uid username password/], 
+    @fields = qw/uid username password/;
+
+    if (defined $self->{fields}) {
+	push @fields, @{$self->{fields}};
+    }
+
+    $results = $self->{sql}->select(table => 'users', fields => join(',', @fields),
 				    where => {email => $args{username}});
 
     $ret = $results->[0];
 
-    if ($ret && $args{password} eq $ret->{password}) {
+    if ($ret && $self->{crypt}->check($ret->{password}, $args{password})) {
 	# retrieve permissions
 	@roles = $self->roles($ret->{uid});
 	@permissions = $self->permissions($ret->{uid}, \@roles);
 
-	return {uid => $ret->{uid}, username => $ret->{username},
-		roles => \@roles, permissions => \@permissions};
+	$acct = {};
+
+	if (defined $self->{fields}) {
+	    for my $f (@{$self->{fields}}) {
+		$acct->{$f} = $ret->{$f};
+	    }
+	}
+
+	$acct->{uid} = $ret->{uid};
+	$acct->{username} = $ret->{username};
+	$acct->{roles} = \@roles;
+	$acct->{permissions} = \@permissions;
+
+	return $acct;
     }
 
     return 0;
@@ -111,6 +146,42 @@ sub permissions {
 						   where => [{uid => $uid}, {rid => {-in => $roles_ref}}]);
 	
     return @permissions;
+}
+
+=head2 password
+
+Set password.
+
+=cut
+
+sub password {
+    my ($self, $password, $username) = @_;
+    my ($uid);
+
+    if ($username) {
+	if ($uid = $self->exists($username)) {
+	    $self->{sql}->update('users', 
+				 {password => $password}, 
+				 {uid => $uid});
+
+	    return 1;
+	}
+    }
+}
+
+=head2 exists
+
+=cut
+
+sub exists {
+    my ($self, $username) = @_;
+    my ($results);
+
+    $results = $self->{sql}->select_field(table => 'users',
+					  fields => ['uid'],
+					  where => {username => $username});
+
+    return $results;
 }
 
 =head1 AUTHOR

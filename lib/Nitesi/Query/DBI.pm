@@ -23,7 +23,7 @@ Nitesi::Query::DBI - DBI query engine for Nitesi
 
     $query->delete('products', {inactive => 1});
 
-=head2 DESCRIPTION
+=head1 DESCRIPTION
 
 This query engine is based on L<SQL::Abstract> and L<SQL::Abstract::More>.
 
@@ -69,7 +69,7 @@ Runs query and returns records as hash references inside a array reference.
 
 sub select {
     my ($self, %args) = @_;
-    my ($stmt, @bind, @fields, %extended);
+    my ($stmt, @bind, @fields, %extended, @sql_params);
 
     if (exists $args{fields}) {
 	@fields= ref($args{fields}) eq 'ARRAY' ? @{$args{fields}} : split /\s+/, $args{fields};
@@ -96,13 +96,21 @@ sub select {
 	    $extended{-order_by} = $args{order};
 	}
 
-	($stmt, @bind) = $self->{sqla}->select(-columns => \@fields,
-					       -where => $args{where},
-					       %extended,
-	    				      );
+	@sql_params = (-columns => \@fields,
+		       -where => $args{where},
+		       %extended,
+	    );
     }
     else {
-	($stmt, @bind) = $self->{sqla}->select($args{table}, \@fields, $args{where}, $args{order});
+	@sql_params = ($args{table}, \@fields, $args{where}, $args{order});
+    }
+
+    eval {
+	($stmt, @bind) = $self->{sqla}->select(@sql_params);
+    };
+
+    if ($@) {
+	die "Failed to parse select parameters (", join(',', @sql_params) , ": $@\n";
     }
 
     return $self->_run($stmt, \@bind, %args);
@@ -134,14 +142,18 @@ sub select_field {
 
 Runs query and returns a list of the first field for all matching records, e.g.:
 
-    @dvd_skus = $query->select_list(table => 'products',
-                                    fields => 'sku',
+    @dvd_skus = $query->select_list_field(table => 'products',
+                                    field => 'sku',
                                     where => {media_type => 'DVD'});
 
 =cut
 
 sub select_list_field {
     my ($self, %args) = @_;
+
+    if ($args{field}) {
+	$args{fields} = [delete $args{field}];
+    }
 
     $args{return_value} = 'array_first';
 
@@ -257,6 +269,25 @@ sub _run {
     }
 
     return \@result;
+}
+
+# private methods for testing, likely to promoted to public methods in the future
+sub _create_table {
+    my ($self, $table, $fields) = @_;
+    my ($stmt, @bind);
+
+    $stmt = $self->{sqla}->generate('create table', $table, $fields);
+
+    $self->_run($stmt, [], return_value => 'execute');
+}
+
+sub _drop_table {
+    my ($self, $table, $fields) = @_;
+    my ($stmt, @bind);
+
+    $stmt = $self->{sqla}->generate('drop table', $table);
+
+    $self->_run($stmt, [], return_value => 'execute');
 }
 
 =head1 CAVEATS

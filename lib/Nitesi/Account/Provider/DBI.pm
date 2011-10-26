@@ -76,7 +76,7 @@ List of permissions for this user.
 
 sub login {
     my ($self, %args) = @_;
-    my ($results, $ret, @roles, @permissions, @fields, $acct);
+    my ($results, $ret, $roles_map, @permissions, @fields, $acct);
 
     @fields = qw/uid username password/;
 
@@ -91,8 +91,8 @@ sub login {
 
     if ($ret && $self->{crypt}->check($ret->{password}, $args{password})) {
 	# retrieve permissions
-	@roles = $self->roles($ret->{uid});
-	@permissions = $self->permissions($ret->{uid}, \@roles);
+	$roles_map = $self->roles($ret->{uid}, map => 1);
+	@permissions = $self->permissions($ret->{uid}, [keys %$roles_map]);
 
 	$acct = {};
 
@@ -104,7 +104,7 @@ sub login {
 
 	$acct->{uid} = $ret->{uid};
 	$acct->{username} = $ret->{username};
-	$acct->{roles} = \@roles;
+	$acct->{roles} = [values %$roles_map];
 	$acct->{permissions} = \@permissions;
 
 	return $acct;
@@ -120,12 +120,32 @@ Returns list of roles for supplied user identifier.
 =cut
 
 sub roles {
-    my ($self, $uid) = @_;
+    my ($self, $uid, %args) = @_;
     my (@roles);
 
-    @roles = $self->{sql}->select_list_field(table => 'user_roles', 
+    if ($args{map}) {
+	my (%map, $record, $role_refs);
+
+	$role_refs = $self->{sql}->select(fields => [qw/roles.rid roles.name/],
+			     join => [qw/user_roles rid=rid roles/],
+			     where => {uid => $uid});
+
+	for my $record (@$role_refs) {
+	    $map{$record->{rid}} = $record->{name};
+	}
+
+	return \%map;
+    }
+    elsif ($args{numeric}) {
+	@roles = $self->{sql}->select_list_field(table => 'user_roles', 
 					     fields => [qw/rid/], 
 					     where => {uid => $uid});
+    }
+    else {
+	@roles = $self->{sql}->select_list_field(fields => [qw/roles.name/],
+						 join => [qw/user_roles rid=rid roles/],
+						 where => {uid => $uid});
+    }
 
     return @roles;
 }
@@ -146,6 +166,42 @@ sub permissions {
 						   where => [{uid => $uid}, {rid => {-in => $roles_ref}}]);
 	
     return @permissions;
+}
+
+=head2 value
+
+Get or set value.
+
+=cut
+
+sub value {
+    my ($self, $username, $name, $value, $uid);
+
+    $self = shift;
+    $username = shift;
+    $name = shift;
+
+    if ($uid = $self->exists($username)) {
+	if (@_) {
+	    # set value
+	    $value = shift;
+
+	    $self->{sql}->update(table => 'users',
+				 set => {$name => $value},
+				 where => {uid => $uid}); 
+
+	    return 1;
+	}
+
+	# retrieve value
+	$value = $self->{sql}->select_field(table => 'users',
+					    field => $name,
+					    where => {uid => $uid});
+
+	return $value;
+    }
+    
+    return;
 }
 
 =head2 password
@@ -170,6 +226,8 @@ sub password {
 }
 
 =head2 exists
+
+Check whether user exists.
 
 =cut
 

@@ -14,9 +14,10 @@ WriteMakefile(
     PL_FILES            => {},
     PREREQ_PM => {
         'Test::More' => 0,
+	'Test::Database' => 0,
 	'SQL::Abstract' => 0,
 	'SQL::Abstract::More' => 0,
-        'Nitesi' => 0.0010,
+        'Nitesi' => 0.0020,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Nitesi-DBI-*' },

@@ -25,8 +25,51 @@ Nitesi::Query::DBI - DBI query engine for Nitesi
 
 =head1 DESCRIPTION
 
-This query engine is based on L<SQL::Abstract> and L<SQL::Abstract::More>.
+This query engine is based on L<SQL::Abstract> and L<SQL::Abstract::More> and
+supports the following query types:
 
+=over 4
+
+=item select
+
+Retrieving data from one or multiple tables.
+
+=item insert
+
+Inserting data in one table.
+
+=item update
+
+Updating data in one table.
+
+=item delete
+
+Deleting data from one table.
+
+=back
+
+=head2 SELECT QUERIES
+
+=head3 Distinct example
+
+    @skus = $query->select_list_field(table => 'navigation_products',
+                   field => 'sku',
+                   distinct => 1,
+                   where => {navigation => 1});
+
+=head3 Order and limit example
+
+    $products = $query->select(table => 'products', 
+                   fields => [qw/sku title price description media_type/],
+		   where => {inactive => 0}, 
+                   order => 'entered DESC', 
+                   limit => 10);
+
+=head3 Join example
+
+    $roles = $query->select(join => [qw/user_roles rid=rid roles/],
+                            fields => [qw/roles.rid roles.name/],
+		            where => {uid => 1});
 =cut
 
 use base 'Nitesi::Object';
@@ -78,6 +121,10 @@ sub select {
 	@fields = ('*');
     }
     
+    if ($args{distinct}) {
+	@fields = ('-distinct' => @fields);
+    }
+
     if ($args{join}) {
 	my @join = ref($args{join}) eq 'ARRAY' ? @{$args{join}} : split /\s+/, $args{join};
 
@@ -88,12 +135,17 @@ sub select {
 	$extended{-limit} = $args{limit};
     }
 
-    if (keys %extended) {
-	# extended syntax for a join / limit
+    if (keys %extended || $fields[0] =~ /^-/) {
+	# extended syntax for a join / limit / distinct
 	$extended{-from} ||= $args{table};
 
 	if ($args{order}) {
 	    $extended{-order_by} = $args{order};
+	}
+
+	unless (exists $args{where}) {
+	    # SQL::Abstract::More chokes on undefined where
+	    $args{where} = {};
 	}
 
 	@sql_params = (-columns => \@fields,
@@ -239,6 +291,10 @@ sub _run {
     my ($self, $stmt, $bind_ref, %args) = @_;
     my ($sth, $row, @result, $ret);
 
+    if ($self->{log_queries}) {
+	$self->{log_queries}->('Query: ', $stmt, $bind_ref, \%args);
+    }
+
     unless ($sth = $self->{dbh}->prepare($stmt)) {
 	die "Failed to prepare $stmt: $DBI::errstr\n";
     }
@@ -276,7 +332,7 @@ sub _create_table {
     my ($self, $table, $fields) = @_;
     my ($stmt, @bind);
 
-    $stmt = $self->{sqla}->generate('create table', $table, $fields);
+    $stmt = $self->{sqla}->generate('create table', \$table, $fields);
 
     $self->_run($stmt, [], return_value => 'execute');
 }
@@ -285,7 +341,7 @@ sub _drop_table {
     my ($self, $table, $fields) = @_;
     my ($stmt, @bind);
 
-    $stmt = $self->{sqla}->generate('drop table', $table);
+    $stmt = $self->{sqla}->generate('drop table', \$table);
 
     $self->_run($stmt, [], return_value => 'execute');
 }

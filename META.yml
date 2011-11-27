@@ -23,4 +23,4 @@ requires:
   Nitesi: 0.002
   SQL::Abstract: 0
   SQL::Abstract::More: 0
-version: 0.0032
+version: 0.0040

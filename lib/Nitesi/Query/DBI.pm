@@ -222,11 +222,36 @@ Runs insert query, e.g.:
 
 sub insert {
     my ($self, @args) = @_;
-    my ($stmt, @bind);
+    my ($stmt, @bind, $ret, @keys);
 
     ($stmt, @bind) = $self->{sqla}->insert(@args);
 
-    $self->_run($stmt, \@bind, return_value => 'execute');
+    $ret = $self->_run($stmt, \@bind, return_value => 'execute');
+
+    # determine primary keys
+    @keys = $self->{dbh}->primary_key(undef, undef, $args[0]);
+    
+    if (@keys == 1) {
+        if (exists $args[1]->{$keys[0]} && defined $args[1]->{$keys[0]}) {
+            return $args[1]->{$keys[0]};
+        }
+        elsif ($self->{dbh}->{Driver}->{Name} eq 'mysql') {
+            return $self->{dbh}->last_insert_id(undef, undef, $args[0], undef);
+        }
+        elsif ($self->{dbh}->{Driver}->{Name} eq 'Pg') {
+            my ($seq_stmt, $seq_name, $seq_val, $sth);
+            
+            # determine whether primary key uses an sequence
+            $seq_stmt = q{select pg_get_serial_sequence(?, ?)};
+
+            if ($seq_name = $self->_run($seq_stmt, [$args[0], $keys[0]], return_value => 'value_first')) {
+                $seq_val = $self->_run('select currval(?)', [$seq_name], return_value => 'value_first');
+                return $seq_val;
+            }
+        }
+    }
+
+    return $ret;
 }
 
 =head2 update
@@ -263,9 +288,11 @@ sub update {
 
 =head2 delete
 
-Runs delete query, e.g.:
+Runs delete query, either with positional or named parameters, e.g.:
 
     $query->delete('products', {inactive => 1});
+
+    $query->delete(table => 'products', where => {inactive => 1});
 
 =cut
 
@@ -280,8 +307,7 @@ sub delete {
     else {
 	# named parameters
 	my %args = @_;
-
-	($stmt, @bind) = $self->{sqla}->delete(table => $args{table}, where => $args{where});
+	($stmt, @bind) = $self->{sqla}->delete($args{table}, $args{where});
     }
 
     $self->_run($stmt, \@bind, return_value => 'execute');
@@ -328,6 +354,19 @@ sub _run {
 }
 
 # private methods for testing, likely to promoted to public methods in the future
+sub _tables {
+    my ($self) = @_;
+    my (@tables);
+
+    @tables = $self->dbh->tables;
+
+    if ($self->dbh->{Driver}->{Name} eq 'mysql') {
+	@tables = map {s/^`(.*)`\.`(.*)`$/$2/; $_} @tables;
+    }
+
+    return @tables;
+}
+
 sub _create_table {
     my ($self, $table, $fields) = @_;
     my ($stmt, @bind);

@@ -20,7 +20,7 @@ no_index:
     - t
     - inc
 requires:
-  Nitesi: 0.005
+  Nitesi: 0.006
   SQL::Abstract: 0
   SQL::Abstract::More: 0
-version: 0.0050
+version: 0.0060

@@ -80,53 +80,58 @@ List of permissions for this user.
 
 sub login {
     my ($self, %args) = @_;
-    my ($results, $ret, $roles_map, @permissions, %conds, @fields, $acct);
 
-    @fields = qw/uid username password/;
-
-    if (defined $self->{fields}) {
-	push @fields, @{$self->{fields}};
-    }
-    if (defined $self->{inactive}) {
-	push @fields, $self->{inactive};
-    }
-
-    $conds{username} = $args{username};
-
-    $results = $self->{sql}->select(table => 'users', fields => join(',', @fields),
-				    where => \%conds);
-
-    $ret = $results->[0];
+    my $ret = $self->_account_retrieve(\%args);
 
     if ($ret) {
-	if (defined $self->{inactive} && $ret->{$self->{inactive}}) {
-	    # disabled user
-	    return 0;
-	}
+        if (defined $self->{inactive} && $ret->{$self->{inactive}}) {
+            # disabled user
+            return 0;
+        }
 
-	if ($self->{crypt}->check($ret->{password}, $args{password})) {
-	    # retrieve permissions
-	    $roles_map = $self->roles($ret->{uid}, map => 1);
-	    @permissions = $self->permissions($ret->{uid}, [keys %$roles_map]);
-
-	    $acct = {};
-
-	    if (defined $self->{fields}) {
-		for my $f (@{$self->{fields}}) {
-		    $acct->{$f} = $ret->{$f};
-		}
-	    }
-
-	    $acct->{uid} = $ret->{uid};
-	    $acct->{username} = $ret->{username};
-	    $acct->{roles} = [values %$roles_map];
-	    $acct->{permissions} = \@permissions;
-	    
-	    return $acct;
-	}
+        if ($self->{crypt}->check($ret->{password}, $args{password})) {
+            # initialize account and return data
+            return $self->_account_init($ret);
+        }
     }
 
     return 0;
+}
+
+=head2 create
+
+Creates an account.
+
+=cut
+    
+sub create {
+    my ($self, %args) = @_;
+    my ($values, $password, $uid);
+
+    $values = {%args};
+
+    $password = delete $values->{password};
+
+    $args{created} ||= \['now()'];
+        
+    $uid = $self->{sql}->insert('users', {%args});
+    return $uid;
+}
+
+=head2 delete
+
+Deletes an account.
+
+=cut
+
+sub delete {
+    my ($self, $uid) = @_;
+    my ($ret);
+    
+    $ret = $self->{sql}->delete(table => 'users',
+                                where => {uid => $uid});
+
+    return $ret;
 }
 
 =head2 roles
@@ -256,6 +261,89 @@ sub exists {
 					  where => {username => $username});
 
     return $results;
+}
+
+=head2 become
+
+Become an user:
+
+    $acct->become('our.customer@linuxia.de');
+
+=cut
+
+sub become {
+    my ($self, $username) = @_;
+    my ($record);
+
+    if ($record = $self->_account_retrieve({username => $username})) {
+        return $self->_account_init($record);
+    }
+}
+
+=head2 load
+
+Loads user with uid.
+
+=cut
+
+sub load {
+    my ($self, $uid) = @_;
+    my ($results);
+
+    $results = $self->{sql}->select(table => 'users',
+                                    where => {uid => $uid});
+
+    if (@$results == 1) {
+        return $results->[0];
+    }
+
+    return;
+}
+
+# helper function to get account hash
+sub _account_retrieve {
+    my ($self, $argref) = @_;
+    my (@fields, %conds, $results);
+
+    @fields = qw/uid username password/;
+
+    if (defined $self->{fields}) {
+        push @fields, @{$self->{fields}};
+    }
+    if (defined $self->{inactive}) {
+        push @fields, $self->{inactive};
+    }
+
+    $conds{username} = $argref->{username};
+
+    $results = $self->{sql}->select(table => 'users',
+                                    fields => join(',', @fields),
+                                    where => \%conds);
+
+    return $results->[0];
+}
+
+# helper function to populate account hash
+sub _account_init {
+    my ($self, $record) = @_;
+    my ($roles_map, @permissions, %acct);
+
+    # retrieve permissions
+    $roles_map = $self->roles($record->{uid}, map => 1);
+    @permissions = $self->permissions($record->{uid}, [keys %$roles_map]);
+
+    if (defined $self->{fields}) {
+		for my $f (@{$self->{fields}}) {
+		    $acct{$f} = $record->{$f};
+		}
+    }
+
+    $acct{uid} = $record->{uid};
+    $acct{username} = $record->{username};
+    $acct{roles} = [values %$roles_map];
+    $acct{permissions} = \@permissions;
+
+    return \%acct;
 }
 
 =head1 AUTHOR

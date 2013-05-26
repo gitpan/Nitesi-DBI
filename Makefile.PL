@@ -20,8 +20,13 @@ WriteMakefile(
     PREREQ_PM => {
 	'SQL::Abstract' => 0,
 	'SQL::Abstract::More' => 0,
-        'Nitesi' => 0.0060,
+        'Nitesi' => 0.0080,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Nitesi-DBI-*' },
+    META_MERGE        => {
+        resources => {
+            repository  => 'https://github.com/racke/Nitesi-DBI',
+        },
+    },
 );

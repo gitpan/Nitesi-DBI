@@ -4,7 +4,7 @@
       "Stefan Hornburg (Racke) <racke@linuxia.de>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "perl_5"
    ],
@@ -34,12 +34,17 @@
       },
       "runtime" : {
          "requires" : {
-            "Nitesi" : "0.006",
+            "Nitesi" : "0.008",
             "SQL::Abstract" : "0",
             "SQL::Abstract::More" : "0"
          }
       }
    },
    "release_status" : "stable",
-   "version" : "0.0060"
+   "resources" : {
+      "repository" : {
+         "url" : "https://github.com/racke/Nitesi-DBI"
+      }
+   },
+   "version" : "0.0080"
 }

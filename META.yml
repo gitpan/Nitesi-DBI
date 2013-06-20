@@ -20,9 +20,9 @@ no_index:
     - t
     - inc
 requires:
-  Nitesi: 0.008
+  Nitesi: 0.009
   SQL::Abstract: 0
   SQL::Abstract::More: 0
 resources:
   repository: https://github.com/racke/Nitesi-DBI
-version: 0.0082
+version: 0.0090

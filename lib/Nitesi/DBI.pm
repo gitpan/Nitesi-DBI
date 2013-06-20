@@ -10,11 +10,11 @@ Nitesi::DBI - DBI bundle for Nitesi shop machine
 
 =head1 VERSION
 
-Version 0.0082
+Version 0.0090
 
 =cut
 
-our $VERSION = '0.0082';
+our $VERSION = '0.0090';
 
 =head1 DESCRIPTION
 
@@ -73,7 +73,7 @@ L<http://search.cpan.org/dist/Nitesi-DBI/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2011 Stefan Hornburg (Racke).
+Copyright 2011-2013 Stefan Hornburg (Racke).
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of either: the GNU General Public License as published
